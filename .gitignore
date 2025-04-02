@@ -254,3 +254,6 @@ paket-files/
 *.sln.iml
 *.der
 .qodo
+
+.cursor/
+.github/
