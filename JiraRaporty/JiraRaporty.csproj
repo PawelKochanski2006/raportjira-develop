@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>77538bc4-b56a-4d6e-ab66-8f4e7247ca0c</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Models\Nowy folder\**" />
+    <Content Remove="Models\Nowy folder\**" />
+    <EmbeddedResource Remove="Models\Nowy folder\**" />
+    <None Remove="Models\Nowy folder\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Models\API\UnixTimeStamp.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="EPPlus" Version="4.5.3.3" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="RestSharp" Version="110.2.0" />
+  </ItemGroup>
+
+</Project>

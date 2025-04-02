@@ -1,0 +1,8 @@
+deploy-jira-reports-ig-pl:
+  stage: deploy
+  script:
+    - powershell -executionpolicy remotesigned -File ./Deploy/deploy-iis.ps1 -projectName JiraRaporty -iisPath d:\inetpub\jira-reports.i-g.pl -poolName jira-reports.i-g.pl
+  only:
+    - test/jira-reports.i-g.pl
+  tags:
+    - APP-IIS-SHARED

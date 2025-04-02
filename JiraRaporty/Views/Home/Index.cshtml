@@ -1,0 +1,48 @@
+﻿@using static System.Runtime.InteropServices.JavaScript.JSType;
+@{
+    ViewData["Title"] = "Logowanie";
+}
+
+<div class="container">
+    <div class="row justify-content-center mt-5 pt-5">
+        <div class="col-md-6 col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="text-center">Login</h3>
+                </div>
+                <div class="card-body">
+                    <form asp-controller="Home" asp-action="Index" method="post">
+                        <div class="form-group mb-3">
+                            <label for="userName">Username:</label>
+                            <input type="text" class="form-control" id="userName" name="userName" placeholder="Enter your username" required>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="password">Password:</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="password" name="password" placeholder="Enter your password" required>
+                            </div>
+                        </div>
+                        @if (ViewData["Message"] != null && (int)(ViewData["NumberOfLogins"]) > 0 && ViewData["NumberOfLogins"] != null)
+                        {
+                            <div class="alert alert-danger">
+                                <p>@ViewData["Message"], pozostała ilość prób: @ViewData["NumberOfLogins"]</p>
+                            </div>
+                        }
+                        @if ((int)(ViewData["NumberOfLogins"]) > 0 && ViewData["NumberOfLogins"] != null)
+                        {
+                            <div class="text-center">
+                                <button type="submit" class="btn btn-primary">Login</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-danger">
+                                <p>Masz @ViewData["NumberOfLogins"] prób, spróbuj się zalogować za jakiś czas</p>
+                            </div>
+                        }
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
