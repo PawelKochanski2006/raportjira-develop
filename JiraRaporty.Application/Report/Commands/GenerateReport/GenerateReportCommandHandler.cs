@@ -1,52 +1,65 @@
-﻿using JiraRaporty.Domain.Interfaces;
+﻿using JiraRaporty.Domain.Entities;
+using JiraRaporty.Domain.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Extensions; // Add this for session extensions
+using System.Text;
 
 namespace JiraRaporty.Application.Report.Commands.GenerateReport
 {
-    public class GenerateReportCommandHandler : IRequestHandler<GenerateReportCommand, ReportResult>
+    public class GenerateReportCommandHandler : IRequestHandler<GenerateReportCommand, MemoryStream>
     {
         private readonly IJiraApiService _jiraApiService;
         private readonly IExcelService _excelService;
-        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public GenerateReportCommandHandler(IJiraApiService jiraApiService, IExcelService excelService, IHttpContextAccessor httpContextAccessor)
+        public GenerateReportCommandHandler(IJiraApiService jiraApiService, IExcelService excelService)
         {
             _jiraApiService = jiraApiService;
             _excelService = excelService;
-            _httpContextAccessor = httpContextAccessor;
         }
 
-        public async Task<ReportResult> Handle(GenerateReportCommand request, CancellationToken cancellationToken)
+        public async Task<MemoryStream> Handle(GenerateReportCommand request, CancellationToken cancellationToken)
         {
-            // Create copies of dates to avoid modifying the original request
-            var fromDate = request.FromDate;
-            var toDate = request.ToDate;
+            var projectIssues = await _jiraApiService.GetProjectIssues(request.FromDate, request.ToDate, request.ProjectList);
+            var excelIssues = new ExcelIssues();
 
-            // Swap dates if needed
-            _jiraApiService.DateSwap(ref fromDate, ref toDate);
-
-            // Add time to include the entire day
-            var endDate = toDate.AddHours(23).AddMinutes(59).AddSeconds(59).AddMilliseconds(999);
-
-            // Get report data from Jira
-            var excelIssues = await _jiraApiService.GenerateReport(fromDate, endDate, request.ProjectList);
-
-            // Join project names for display
-            var projects = string.Join(", ", request.ProjectList);
-
-            // Generate Excel file
-            var stream = _excelService.GenerateExcelReport(fromDate, toDate, request.ProjectList, projects, request.InLocal, excelIssues);
-
-            // Create file name
-            var fileName = $"{projects} {fromDate:dd.MM.yyyy} - {toDate:dd.MM.yyyy}.xlsx";
-
-            return new ReportResult
+            foreach (var issue in projectIssues.issues)
             {
-                Stream = stream,
-                FileName = fileName
-            };
+                var worklog = await _jiraApiService.GetIssueWorklog(issue.id);
+
+                foreach (var log in worklog.worklogs)
+                {
+                    var logDate = log.started.Date;
+                    if (logDate >= request.FromDate.Date && logDate <= request.ToDate.Date)
+                    {
+                        var epicName = issue.fields.customfield_10002;
+
+                        excelIssues.Rows.Add(new ExcelIssuesRow
+                        {
+                            Project = issue.fields.project?.name,
+                            Key = issue.key,
+                            Summary = issue.fields.summary,
+                            EpicName = epicName,
+                            Reporter = issue.fields.reporter?.displayName,
+                            Labels = string.Join(", ", issue.fields.labels ?? Array.Empty<string>()),
+                            Started = log.started,
+                            WorklogAuthor = log.author?.displayName,
+                            TimeSpent = log.timeSpent,
+                            TimeSpentSeconds = log.timeSpentSeconds,
+                            Comment = log.comment
+                        });
+                    }
+                }
+            }
+
+            var projects = string.Join(", ", request.ProjectList);
+            return _excelService.GenerateExcelReport(
+                request.FromDate,
+                request.ToDate,
+                request.ProjectList,
+                projects,
+                request.InLocal,
+                excelIssues,
+                request.HighlightReporters);
         }
     }
 }

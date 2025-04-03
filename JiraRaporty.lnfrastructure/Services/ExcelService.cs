@@ -15,7 +15,14 @@ namespace JiraRaporty.Infrastructure.Services
         private const string ColorYellow = "#fff2cc";
         private const string ColorRed = "#ff0000";
 
-        public MemoryStream GenerateExcelReport(DateTime fromDate, DateTime toDate, List<string> projectList, string projects, bool inLocal, ExcelIssues excelIssues)
+        public MemoryStream GenerateExcelReport(
+            DateTime fromDate,
+            DateTime toDate,
+            List<string> projectList,
+            string projects,
+            bool inLocal,
+            ExcelIssues excelIssues,
+            bool highlightReporters = true)
         {
             var stream = new MemoryStream();
 
@@ -27,7 +34,7 @@ namespace JiraRaporty.Infrastructure.Services
                 const int headerRow = 4;
                 AddHeaders(worksheet, headerRow);
                 var dataRowStart = headerRow + 1;
-                var dataRowEnd = FillData(worksheet, dataRowStart, excelIssues, inLocal);
+                var dataRowEnd = FillData(worksheet, dataRowStart, excelIssues, inLocal, highlightReporters);
                 ApplyStyles(worksheet, headerRow, dataRowEnd);
 
                 if (inLocal)
@@ -71,7 +78,7 @@ namespace JiraRaporty.Infrastructure.Services
             }
         }
 
-        private int FillData(ExcelWorksheet worksheet, int dataRowStart, ExcelIssues excelIssues, bool inLocal)
+        private int FillData(ExcelWorksheet worksheet, int dataRowStart, ExcelIssues excelIssues, bool inLocal, bool highlightReporters)
         {
             var currentRow = dataRowStart;
             var workInLocationKeys = new List<string>();
@@ -91,11 +98,18 @@ namespace JiraRaporty.Infrastructure.Services
                 worksheet.Cells[currentRow, 11].Formula = $"TIME(QUOTIENT(J{currentRow},1),(J{currentRow}-QUOTIENT(J{currentRow},1))*60,0)";
                 worksheet.Cells[currentRow, 12].Value = item.Comment;
 
-                // Check phrase in "Zlecił" field
-                if (item.Reporter != null && !item.Reporter.Contains("CRIDO"))
+                // Check for reporter highlighting if enabled
+                if (highlightReporters && item.Reporter != null)
                 {
-                    worksheet.Cells[currentRow, 5].Style.Fill.PatternType = ExcelFillStyle.Solid;
-                    worksheet.Cells[currentRow, 5].Style.Fill.BackgroundColor.SetColor(ColorTranslator.FromHtml(ColorRed));
+                    // Check if the reporter name contains square brackets, indicating contractor
+                    bool isContractor = item.Reporter.Contains("[") && item.Reporter.Contains("]");
+
+                    // Highlight if it's not a contractor (no square brackets)
+                    if (!isContractor)
+                    {
+                        worksheet.Cells[currentRow, 5].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                        worksheet.Cells[currentRow, 5].Style.Fill.BackgroundColor.SetColor(ColorTranslator.FromHtml(ColorRed));
+                    }
                 }
 
                 if (inLocal)

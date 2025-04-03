@@ -5,37 +5,26 @@ using JiraRaporty.MVC.Models;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using System.Diagnostics;
-using Microsoft.AspNetCore.Http.Extensions;
 
 namespace JiraRaporty.MVC.Controllers
 {
     public class HomeController : Controller
     {
-        private readonly ILogger<HomeController> _logger;
         private readonly IMediator _mediator;
-        private readonly IConfiguration _configuration;
+        private readonly ILogger<HomeController> _logger;
 
-        public HomeController(ILogger<HomeController> logger, IMediator mediator, IConfiguration configuration)
+        public HomeController(IMediator mediator, ILogger<HomeController> logger)
         {
-            _logger = logger;
             _mediator = mediator;
-            _configuration = configuration;
+            _logger = logger;
         }
 
         public IActionResult Index()
         {
-            var sessionName = HttpContext.Session.GetString("_Name");
-            var sessionPass = HttpContext.Session.GetString("_Pass");
-
-            if (!string.IsNullOrEmpty(sessionName) && !string.IsNullOrEmpty(sessionPass))
+            if (HttpContext.Session.GetString("IsAuthenticated") == "true")
             {
                 return RedirectToAction("Raport");
             }
-
-            var numberOfLogins = int.Parse(_configuration["JiraSettings:NumberOfLogins"] ?? "3");
-            ViewData["NumberOfLogins"] = numberOfLogins;
-            HttpContext.Session.SetInt32("_Log", numberOfLogins);
-
             return View();
         }
 
@@ -47,68 +36,95 @@ namespace JiraRaporty.MVC.Controllers
                 return View(model);
             }
 
-            var command = new LoginCommand
+            try
             {
-                Username = model.Username,
-                Password = model.Password
-            };
+                var command = new LoginCommand
+                {
+                    Username = model.Username,
+                    Password = model.Password
+                };
 
-            var result = await _mediator.Send(command);
+                var result = await _mediator.Send(command);
 
-            if (!result.Success)
+                if (result.Success)
+                {
+                    HttpContext.Session.SetString("IsAuthenticated", "true");
+                    HttpContext.Session.SetString("Username", model.Username);
+                    return RedirectToAction("Raport");
+                }
+                else
+                {
+                    ModelState.AddModelError("", "Nieprawid³owa nazwa u¿ytkownika lub has³o");
+                    return View(model);
+                }
+            }
+            catch (Exception ex)
             {
-                ModelState.AddModelError("", result.ErrorMessage!);
-                ViewData["NumberOfLogins"] = HttpContext.Session.GetInt32("_Log");
+                _logger.LogError(ex, "Error during login");
+                ModelState.AddModelError("", "Wyst¹pi³ b³¹d podczas logowania");
                 return View(model);
             }
-
-            return RedirectToAction("Raport");
         }
 
+        [HttpGet]
         public async Task<IActionResult> Raport()
         {
-            var sessionName = HttpContext.Session.GetString("_Name");
-            var sessionPass = HttpContext.Session.GetString("_Pass");
-
-            if (string.IsNullOrEmpty(sessionName) || string.IsNullOrEmpty(sessionPass))
+            if (HttpContext.Session.GetString("IsAuthenticated") != "true")
             {
                 return RedirectToAction("Index");
             }
 
             var projects = await _mediator.Send(new GetProjectsQuery());
-            return View(new RaportViewModel { Projects = projects });
+            var model = new RaportViewModel
+            {
+                Projects = projects
+            };
+
+            return View(model);
         }
 
         [HttpPost]
-        public async Task<IActionResult> ExportToExcel(ExportToExcelViewModel model)
+        public async Task<IActionResult> ExportToExcel(RaportViewModel model)
         {
-            var sessionName = HttpContext.Session.GetString("_Name");
-            var sessionPass = HttpContext.Session.GetString("_Pass");
-
-            if (string.IsNullOrEmpty(sessionName) || string.IsNullOrEmpty(sessionPass))
+            if (HttpContext.Session.GetString("IsAuthenticated") != "true")
             {
                 return RedirectToAction("Index");
             }
 
-            var command = new GenerateReportCommand
+            if (!ModelState.IsValid)
             {
-                FromDate = model.FromDate,
-                ToDate = model.ToDate,
-                ProjectList = model.ProjectList,
-                InLocal = model.InLocal
-            };
+                model.Projects = await _mediator.Send(new GetProjectsQuery());
+                return View("Raport", model);
+            }
 
-            var result = await _mediator.Send(command);
+            try
+            {
+                var command = new GenerateReportCommand
+                {
+                    FromDate = model.FromDate,
+                    ToDate = model.ToDate,
+                    ProjectList = model.ProjectList,
+                    InLocal = model.InLocal,
+                    HighlightReporters = model.HighlightReporters
+                };
 
-            return File(result.Stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", result.FileName);
+                var stream = await _mediator.Send(command);
+
+                return File(
+                    stream,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    $"Raport_{DateTime.Now:yyyyMMdd}.xlsx");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during export to Excel");
+                ModelState.AddModelError("", "Wyst¹pi³ b³¹d podczas eksportu do Excela");
+                model.Projects = await _mediator.Send(new GetProjectsQuery());
+                return View("Raport", model);
+            }
         }
 
-        public IActionResult Privacy()
-        {
-            return View();
-        }
-
-        public IActionResult LogOut()
+        public IActionResult Logout()
         {
             HttpContext.Session.Clear();
             return RedirectToAction("Index");
